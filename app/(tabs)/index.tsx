@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp, MatchResult } from '@/context/AppContext';
 
 export default function FeedScreen() {
-  const { entries, addReply, toggleResonance, replyDrafts, setReplyDraft, getMatches, draftText, shareEntryPublicly } = useApp();
+  const { entries, addReply, toggleResonance, toggleReplyResonance, replyDrafts, setReplyDraft, getMatches, draftText, shareEntryPublicly } = useApp();
   const { posted } = useLocalSearchParams<{ posted?: string }>();
   const router = useRouter();
 
@@ -190,8 +190,12 @@ export default function FeedScreen() {
           isFirst && highlightFirst && styles.highlightedPost
         ]}
       >
-        {/* Main Post Row */}
-        <View style={styles.entryRow}>
+        {/* Main Post Row - Click to expand replies */}
+        <TouchableOpacity 
+          style={styles.entryRow}
+          onPress={() => toggleThread(entry.id)}
+          activeOpacity={0.95}
+        >
           {/* Left Column: Avatar & Line */}
           <View style={styles.leftColumn}>
             <View style={[styles.avatarCircle, { backgroundColor: entry.avatarColor }]}>
@@ -256,19 +260,16 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Collapsed Reply Count Metadata */}
+            {/* Collapsed Reply Count Metadata (rendered as simple view since whole post toggles expansion) */}
             {!isExpanded && hasReplies && (
-              <TouchableOpacity
-                style={styles.metadataRow}
-                onPress={() => toggleThread(entry.id)}
-              >
+              <View style={styles.metadataRow}>
                 <Text style={styles.metadataText}>
                   {entry.replies.length} {entry.replies.length === 1 ? 'reply' : 'replies'}
                 </Text>
-              </TouchableOpacity>
+              </View>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Expanded Thread Replies Container */}
         {isExpanded && (
@@ -288,9 +289,41 @@ export default function FeedScreen() {
                 <View style={styles.replyRightColumn}>
                   <View style={styles.replyHeader}>
                     <Text style={styles.replyAuthor}>{reply.author}</Text>
-                    <Text style={styles.replyTimestamp}>{reply.timestamp}</Text>
+                    <Text style={styles.replyTimestamp}>· {reply.timestamp}</Text>
                   </View>
                   <Text style={styles.replyText}>{reply.text}</Text>
+
+                  {/* Reply Action Bar */}
+                  <View style={styles.replyActionBar}>
+                    <TouchableOpacity 
+                      style={styles.replyActionIcon} 
+                      onPress={() => toggleReplyResonance(entry.id, reply.id)}
+                      activeOpacity={0.6}
+                    >
+                      <Feather 
+                        name="activity" 
+                        size={14} 
+                        color={reply.hasResonated ? '#F0706A' : '#8e8e93'} 
+                      />
+                      {reply.hasResonated && <View style={styles.replyResonanceDot} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.replyActionIcon} 
+                      onPress={() => handleOpenReplyModal(entry.id)}
+                      activeOpacity={0.6}
+                    >
+                      <Feather name="message-square" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                      <Feather name="repeat" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                      <Feather name="send" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             ))}
@@ -359,8 +392,12 @@ export default function FeedScreen() {
           </Text>
         </View>
 
-        {/* Main Post Row */}
-        <View style={styles.entryRow}>
+        {/* Main Post Row - Click to expand replies */}
+        <TouchableOpacity 
+          style={styles.entryRow}
+          onPress={() => toggleThread(entry.id)}
+          activeOpacity={0.95}
+        >
           {/* Left Column */}
           <View style={styles.leftColumn}>
             <View style={[styles.avatarCircle, { backgroundColor: entry.avatarColor }]}>
@@ -422,19 +459,16 @@ export default function FeedScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Collapsed Reply Count Metadata */}
+            {/* Collapsed Reply Count Metadata (rendered as simple view since whole post toggles expansion) */}
             {!isExpanded && hasReplies && (
-              <TouchableOpacity
-                style={styles.metadataRow}
-                onPress={() => toggleThread(entry.id)}
-              >
+              <View style={styles.metadataRow}>
                 <Text style={styles.metadataText}>
                   {entry.replies.length} {entry.replies.length === 1 ? 'reply' : 'replies'}
                 </Text>
-              </TouchableOpacity>
+              </View>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Expanded Thread Replies Container */}
         {isExpanded && (
@@ -452,9 +486,41 @@ export default function FeedScreen() {
                 <View style={styles.replyRightColumn}>
                   <View style={styles.replyHeader}>
                     <Text style={styles.replyAuthor}>{reply.author}</Text>
-                    <Text style={styles.replyTimestamp}>{reply.timestamp}</Text>
+                    <Text style={styles.replyTimestamp}>· {reply.timestamp}</Text>
                   </View>
                   <Text style={styles.replyText}>{reply.text}</Text>
+
+                  {/* Reply Action Bar */}
+                  <View style={styles.replyActionBar}>
+                    <TouchableOpacity 
+                      style={styles.replyActionIcon} 
+                      onPress={() => toggleReplyResonance(entry.id, reply.id)}
+                      activeOpacity={0.6}
+                    >
+                      <Feather 
+                        name="activity" 
+                        size={14} 
+                        color={reply.hasResonated ? '#F0706A' : '#8e8e93'} 
+                      />
+                      {reply.hasResonated && <View style={styles.replyResonanceDot} />}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                      style={styles.replyActionIcon} 
+                      onPress={() => handleOpenReplyModal(entry.id)}
+                      activeOpacity={0.6}
+                    >
+                      <Feather name="message-square" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                      <Feather name="repeat" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                      <Feather name="send" size={14} color="#8e8e93" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             ))}
@@ -1033,6 +1099,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
+  },
+  replyActionBar: {
+    flexDirection: 'row',
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  replyActionIcon: {
+    marginRight: 24,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  replyResonanceDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: -3,
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#F0706A',
   },
   inlineReplyWrapper: {
     flexDirection: 'row',

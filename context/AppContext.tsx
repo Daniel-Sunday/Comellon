@@ -7,6 +7,7 @@ export interface Reply {
   avatarColor: string;
   text: string;
   timestamp: string;
+  hasResonated?: boolean;
 }
 
 export interface Entry {
@@ -37,6 +38,7 @@ interface AppContextType {
   draftText: string;
   setDraftText: (val: string) => void;
   toggleResonance: (entryId: string) => void;
+  toggleReplyResonance: (entryId: string, replyId: string) => void;
   replyDrafts: Record<string, string>;
   setReplyDraft: (entryId: string, text: string) => void;
   getMatches: (text: string) => MatchResult[];
@@ -244,6 +246,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const toggleReplyResonance = (entryId: string, replyId: string) => {
+    setEntries(prevEntries =>
+      prevEntries.map(entry => {
+        if (entry.id === entryId) {
+          return {
+            ...entry,
+            replies: entry.replies.map(reply =>
+              reply.id === replyId
+                ? { ...reply, hasResonated: !reply.hasResonated }
+                : reply
+            )
+          };
+        }
+        return entry;
+      })
+    );
+  };
+
   const getMatches = (text: string): MatchResult[] => {
     return calculateMatches(text, entries);
   };
@@ -266,6 +286,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       draftText,
       setDraftText,
       toggleResonance,
+      toggleReplyResonance,
       replyDrafts,
       setReplyDraft,
       getMatches,
