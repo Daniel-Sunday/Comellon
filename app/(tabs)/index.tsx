@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp, MatchResult } from '@/context/AppContext';
 
@@ -248,7 +248,7 @@ export default function FeedScreen() {
                 onPress={() => handleOpenReplyModal(entry.id)}
                 activeOpacity={0.6}
               >
-                <Feather name="message-square" size={18} color="#8e8e93" />
+                <Feather name="message-circle" size={18} color="#8e8e93" />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
@@ -256,7 +256,7 @@ export default function FeedScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Feather name="send" size={18} color="#8e8e93" />
+                <Ionicons name="paper-plane-outline" size={18} color="#8e8e93" />
               </TouchableOpacity>
             </View>
 
@@ -313,7 +313,7 @@ export default function FeedScreen() {
                       onPress={() => handleOpenReplyModal(entry.id)}
                       activeOpacity={0.6}
                     >
-                      <Feather name="message-square" size={14} color="#8e8e93" />
+                      <Feather name="message-circle" size={14} color="#8e8e93" />
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
@@ -321,7 +321,7 @@ export default function FeedScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
-                      <Feather name="send" size={14} color="#8e8e93" />
+                      <Ionicons name="paper-plane-outline" size={14} color="#8e8e93" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -447,7 +447,7 @@ export default function FeedScreen() {
                 onPress={() => handleOpenReplyModal(entry.id)}
                 activeOpacity={0.6}
               >
-                <Feather name="message-square" size={18} color="#8e8e93" />
+                <Feather name="message-circle" size={18} color="#8e8e93" />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
@@ -455,7 +455,7 @@ export default function FeedScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Feather name="send" size={18} color="#8e8e93" />
+                <Ionicons name="paper-plane-outline" size={18} color="#8e8e93" />
               </TouchableOpacity>
             </View>
 
@@ -510,7 +510,7 @@ export default function FeedScreen() {
                       onPress={() => handleOpenReplyModal(entry.id)}
                       activeOpacity={0.6}
                     >
-                      <Feather name="message-square" size={14} color="#8e8e93" />
+                      <Feather name="message-circle" size={14} color="#8e8e93" />
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
@@ -518,7 +518,7 @@ export default function FeedScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
-                      <Feather name="send" size={14} color="#8e8e93" />
+                      <Ionicons name="paper-plane-outline" size={14} color="#8e8e93" />
                     </TouchableOpacity>
                   </View>
                 </View>

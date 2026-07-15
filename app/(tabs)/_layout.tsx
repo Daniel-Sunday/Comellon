@@ -39,11 +39,29 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="matches"
+        options={{
+          title: 'Matches',
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="compass" size={size || 24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="capture"
         options={{
           title: 'Drop Thoughts',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="edit-2" size={size || 24} color={color} />
+            <Feather name="edit-3" size={size || 24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="user" size={size || 24} color={color} />
           ),
         }}
       />

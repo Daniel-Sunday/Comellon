@@ -1,0 +1,4 @@
+- Work in small, testable increments. One module per turn without checkpointing is the max.
+- Write the failing test before the implementation. Red → green → refactor, never all-tests-then-all-code.
+- Prefer deep modules: small interface, real logic behind it. A module whose interface is nearly as complex as its implementation is shallow — flag it.
+- Before naming a new domain concept, check CONTEXT.md. If it's not there, propose adding it before using it in code.

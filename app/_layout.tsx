@@ -1,12 +1,13 @@
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppProvider } from '../context/AppContext';
+import { AppProvider, useApp } from '../context/AppContext';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -64,6 +65,18 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const { session, authLoading } = useApp();
+
+  // Redirect to Auth screen if not authenticated (and Supabase is configured)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    if (authLoading) return;
+
+    if (!session) {
+      router.replace('/auth');
+    }
+  }, [session, authLoading]);
 
   // Force dark theme or respect colorScheme, but Comellon requires true black background
   const theme = colorScheme === 'dark' ? CustomDarkTheme : {
@@ -80,6 +93,7 @@ function RootLayoutNav() {
     <ThemeProvider value={theme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>
