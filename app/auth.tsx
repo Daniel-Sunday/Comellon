@@ -65,21 +65,15 @@ export default function AuthScreen() {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password: password.trim(),
+          options: {
+            data: {
+              display_name: displayName.trim(),
+            },
+          },
         });
 
         if (signUpError) throw signUpError;
         if (!signUpData.user) throw new Error('Sign up failed');
-
-        // Create profile in public.profiles table
-        const defaultUsername = generateDefaultUsername();
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: signUpData.user.id,
-          username: defaultUsername,
-          display_name: displayName.trim(),
-          avatar_color: getRandomColor(),
-        });
-
-        if (profileError) throw profileError;
 
         setErrorMsg('Sign up successful! Please check your email or log in.');
         setIsSignUp(false);

@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
   Platform,
+  ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useApp, MatchResult } from '@/context/AppContext';
 
 export default function MatchesScreen() {
-  const { entries, getMatches, draftText } = useApp();
+  const { entries, getMatches, draftText, toggleResonance } = useApp();
+  const router = useRouter();
+  const [activeMatches, setActiveMatches] = useState<MatchResult[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Find user's thoughts
   const userEntries = entries.filter(e => e.author === 'You');
@@ -23,9 +29,26 @@ export default function MatchesScreen() {
         ? draftText 
         : 'A quiet notebook app where writing down thoughts feels low-stakes, completely free from algorithms, vanity likes, and social metrics.');
 
-  // Calculate matching minds from reference text
-  const matches = getMatches(referenceText);
-  const activeMatches = matches.filter(m => m.entry.author !== 'You' && m.score > 5);
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    const targetEntryId = userEntries.length > 0 ? userEntries[0].id : undefined;
+
+    getMatches(referenceText, targetEntryId)
+      .then(results => {
+        if (isMounted) {
+          setActiveMatches(results.filter(m => m.entry.author !== 'You' && m.score > 5));
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching matches:', err);
+        if (isMounted) setLoading(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [referenceText, entries]);
 
   const renderMatchRow = (match: MatchResult) => {
     const { entry, score, type, reason } = match;
@@ -45,7 +68,7 @@ export default function MatchesScreen() {
       <View key={entry.id} style={styles.postContainer}>
         {/* Align match details with text column (44px avatar + 6px margin = 50px offset) */}
         <View style={styles.matchHeaderInsight}>
-          <Feather name="compass" size={11} color={matchColor} style={styles.insightIcon} />
+          <Feather name="compass" size={11} color={matchColor} strokeWidth={2.2} style={styles.insightIcon} />
           <Text style={[styles.insightText, { color: matchColor }]}>
             {matchLabel} · {reason}
           </Text>
@@ -62,10 +85,45 @@ export default function MatchesScreen() {
           {/* Column 2: Content */}
           <View style={styles.rightColumn}>
             <View style={styles.userHeader}>
-              <Text style={styles.authorName}>{entry.author}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.authorName}>{entry.author}</Text>
+                <Text style={styles.timestampMuted}> {entry.timestamp}</Text>
+              </View>
             </View>
             <Text style={styles.entryText}>{entry.text}</Text>
-            <Text style={styles.thinkingTimestamp}>Notebook Entry · {entry.timestamp}</Text>
+
+            {/* Horizontal Action Bar */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity 
+                style={styles.actionIcon} 
+                onPress={() => toggleResonance(entry.id)}
+                activeOpacity={0.6}
+              >
+                <Feather 
+                  name="activity" 
+                  size={18} 
+                  color={entry.hasResonated ? '#F0706A' : '#ffffff'} 
+                  strokeWidth={2.2}
+                />
+                {entry.hasResonated && <View style={styles.resonanceDot} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.actionIcon} 
+                onPress={() => router.push(`/?replyTo=${entry.id}`)}
+                activeOpacity={0.6}
+              >
+                <Feather name="message-circle" size={18} color="#ffffff" strokeWidth={2.2} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
+                <Feather name="repeat" size={18} color="#ffffff" strokeWidth={2.2} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
+                <Feather name="send" size={18} color="#ffffff" strokeWidth={2.2} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -99,7 +157,9 @@ export default function MatchesScreen() {
 
         {/* Matches Feed Listing */}
         <View style={styles.resultsContainer}>
-          {activeMatches.length > 0 ? (
+          {loading ? (
+            <ActivityIndicator style={{ marginVertical: 40 }} color="#F0706A" />
+          ) : activeMatches.length > 0 ? (
             activeMatches.map(match => renderMatchRow(match))
           ) : (
             <View style={styles.emptyContainer}>
@@ -241,6 +301,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
   },
+  timestampMuted: {
+    color: '#636366',
+    fontSize: 12,
+    marginLeft: 8,
+    fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
+  },
   emptyContainer: {
     paddingVertical: 40,
     alignItems: 'center',
@@ -249,5 +315,26 @@ const styles = StyleSheet.create({
     color: '#636366',
     fontSize: 14,
     textAlign: 'center',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  actionIcon: {
+    marginRight: 32,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  resonanceDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: -4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#F0706A',
   },
 });

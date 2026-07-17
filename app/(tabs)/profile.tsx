@@ -124,20 +124,19 @@ export default function ProfileScreen() {
           {/* Right column */}
           <View style={styles.rightColumn}>
             <View style={styles.authorRow}>
-              <Text style={styles.authorName}>{entry.author}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.authorName}>{entry.author}</Text>
+                <Text style={styles.timestampMuted}>  {entry.timestamp}</Text>
+              </View>
               {entry.isPrivate && (
                 <View style={styles.privateBadge}>
-                  <Feather name="lock" size={10} color="#8e8e93" style={{ marginRight: 4 }} />
+                  <Feather name="lock" size={10} color="#ffffff" strokeWidth={2.2} style={{ marginRight: 4 }} />
                   <Text style={styles.privateBadgeText}>Private</Text>
                 </View>
               )}
             </View>
 
             <Text style={styles.entryText}>{entry.text}</Text>
-
-            <Text style={styles.thinkingTimestamp}>
-              Notebook Entry · {entry.timestamp}
-            </Text>
 
             {/* Action icons */}
             <View style={styles.actionBar}>
@@ -149,21 +148,22 @@ export default function ProfileScreen() {
                 <Feather 
                   name="activity" 
                   size={18} 
-                  color={entry.hasResonated ? '#F0706A' : '#8e8e93'} 
+                  color={entry.hasResonated ? '#F0706A' : '#ffffff'} 
+                  strokeWidth={2.2}
                 />
                 {entry.hasResonated && <View style={styles.resonanceDot} />}
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Feather name="message-circle" size={18} color="#8e8e93" />
+                <Feather name="message-circle" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Feather name="repeat" size={18} color="#8e8e93" />
+                <Feather name="repeat" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Ionicons name="paper-plane-outline" size={18} color="#8e8e93" />
+                <Feather name="send" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
             </View>
           </View>
@@ -534,6 +534,12 @@ const styles = StyleSheet.create({
     color: '#636366',
     fontSize: 12,
     marginTop: 8,
+    fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
+  },
+  timestampMuted: {
+    color: '#636366',
+    fontSize: 12,
+    marginLeft: 8,
     fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
   },
   actionBar: {

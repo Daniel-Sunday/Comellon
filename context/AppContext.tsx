@@ -10,6 +10,7 @@ export interface Reply {
   timestamp: string;
   hasResonated?: boolean;
   author_id?: string;
+  created_at?: string;
 }
 
 export interface Entry {
@@ -26,6 +27,8 @@ export interface Entry {
   isPrivate?: boolean;
   author_id?: string;
   embedding?: number[] | null;
+  created_at?: string;
+  replyCount?: number;
 }
 
 export interface MatchResult {
@@ -45,29 +48,37 @@ interface AppContextType {
   toggleReplyResonance: (entryId: string, replyId: string) => Promise<void>;
   replyDrafts: Record<string, string>;
   setReplyDraft: (entryId: string, text: string) => void;
-  getMatches: (text: string) => MatchResult[];
+  getMatches: (text: string, targetEntryId?: string) => Promise<MatchResult[]>;
   shareEntryPublicly: (entryId: string) => Promise<void>;
   session: any;
   profile: any;
   authLoading: boolean;
   signOut: () => Promise<void>;
   updateProfile: (updates: { display_name: string; username: string; bio: string }) => Promise<void>;
+  fetchEntries: (isRefresh?: boolean) => Promise<void>;
+  loadingMore: boolean;
+  refreshing: boolean;
+  hasMore: boolean;
+  repliesMap: Record<string, Reply[]>;
+  loadingReplies: Record<string, boolean>;
+  loadReplies: (entryId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper to format timestamps to match "Yesterday", "2h ago", "Just now"
+// Helper to format timestamps to match "17m", "2h", "1d", etc.
 const formatTimestamp = (dateStr: string) => {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffHours < 48) return 'Yesterday';
+  if (diffMins < 1) return '1m';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
   
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
@@ -93,7 +104,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'D',
     avatarColor: '#4A6FA5',
     text: 'Thinking about how we build software today. We spend 90% of our time configuring tools and only 10% actually thinking about the core logic. There has to be a simpler way.',
-    timestamp: '2h ago',
+    timestamp: '2h',
     replies: [
       {
         id: '1-1',
@@ -101,7 +112,7 @@ const INITIAL_ENTRIES: Entry[] = [
         avatar: 'K',
         avatarColor: '#58B19F',
         text: 'So true. The modern stack is a tower of cards.',
-        timestamp: '1h ago',
+        timestamp: '1h',
       },
       {
         id: '1-2',
@@ -109,7 +120,7 @@ const INITIAL_ENTRIES: Entry[] = [
         avatar: 'E',
         avatarColor: '#D6A2E8',
         text: "Let's delete half of the stack.",
-        timestamp: '45m ago',
+        timestamp: '45m',
       }
     ],
     hasResonated: false,
@@ -122,7 +133,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'K',
     avatarColor: '#58B19F',
     text: "A quiet notebook. That's what the internet used to feel like. Before feeds, algorithms, and notification badges ruined it. Just people writing down thoughts.",
-    timestamp: '7:13 PM',
+    timestamp: '3h',
     replies: [],
     hasResonated: false,
     tags: ['internet', 'algorithms', 'notebook', 'thoughts'],
@@ -134,7 +145,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'E',
     avatarColor: '#D6A2E8',
     text: "Comellon is basically digital notebook therapy. Let's see if anyone else thinks like this.",
-    timestamp: 'Yesterday',
+    timestamp: '1d',
     replies: [
       {
         id: '3-1',
@@ -142,7 +153,7 @@ const INITIAL_ENTRIES: Entry[] = [
         avatar: 'D',
         avatarColor: '#4A6FA5',
         text: 'Exactly. No likes, no numbers. Just raw thoughts.',
-        timestamp: 'Yesterday',
+        timestamp: '1d',
       }
     ],
     hasResonated: true,
@@ -155,7 +166,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'M',
     avatarColor: '#E28743',
     text: "Bootstrapping is underrated. When you raise VC money, you aren't building a product anymore — you're building a financial asset for someone else. Clean alignment comes from customer revenue.",
-    timestamp: 'Yesterday',
+    timestamp: '1d',
     replies: [],
     hasResonated: false,
     tags: ['startup', 'bootstrapping', 'funding', 'vc'],
@@ -167,7 +178,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'D',
     avatarColor: '#2C3E50',
     text: 'Everyone glorifies bootstrapping, but speed to market is the only moat that matters in crowded industries. Venture scale is what lets you build deep tech that takes 5 years of R&D before a single dollar of revenue.',
-    timestamp: '2 days ago',
+    timestamp: '2d',
     replies: [],
     hasResonated: false,
     tags: ['startup', 'vc', 'funding', 'speed'],
@@ -179,7 +190,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'S',
     avatarColor: '#9B59B6',
     text: "Language models don't think, they recall patterns. We are optimizing for mimicry rather than actual logical reasoning. The first true AGI will probably look nothing like a transformer.",
-    timestamp: '2 days ago',
+    timestamp: '2d',
     replies: [],
     hasResonated: false,
     tags: ['ai', 'agi', 'reasoning', 'transformers', 'software'],
@@ -191,7 +202,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'G',
     avatarColor: '#27AE60',
     text: 'Who cares if LLMs just predict the next token? If next-token prediction leads to emergent logical reasoning, then prediction and thinking are functionally identical.',
-    timestamp: '3 days ago',
+    timestamp: '3d',
     replies: [],
     hasResonated: false,
     tags: ['ai', 'transformers', 'logic', 'reasoning'],
@@ -203,7 +214,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'L',
     avatarColor: '#16A085',
     text: 'Entropy is the only physical quantity that requires a direction of time. In a closed system, complexity always increases. Writing thoughts down is basically an act of negative entropy.',
-    timestamp: '4 days ago',
+    timestamp: '4d',
     replies: [],
     hasResonated: false,
     tags: ['physics', 'entropy', 'time', 'complexity'],
@@ -215,7 +226,7 @@ const INITIAL_ENTRIES: Entry[] = [
     avatar: 'A',
     avatarColor: '#F39C12',
     text: "Minimalist product design isn't about removing features. It is about reducing the cognitive load required to access utility. If the user has to plan how to use your tool, you failed.",
-    timestamp: '5 days ago',
+    timestamp: '5d',
     replies: [],
     hasResonated: false,
     tags: ['design', 'ux', 'minimalism', 'product'],
@@ -235,6 +246,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Draft embedding for real-time matches preview
   const [draftEmbedding, setDraftEmbedding] = useState<number[] | null>(null);
+
+  // Pagination states
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Dynamic replies loading states
+  const [repliesMap, setRepliesMap] = useState<Record<string, Reply[]>>({});
+  const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
 
   // Initial Auth listener
   useEffect(() => {
@@ -268,7 +288,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Fetch full entries when session or configuration changes
   useEffect(() => {
     if (isSupabaseConfigured) {
-      fetchEntriesFromSupabase();
+      fetchEntries(true);
     }
   }, [session]);
 
@@ -312,10 +332,78 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const fetchEntriesFromSupabase = async () => {
+  const loadReplies = async (entryId: string) => {
+    if (!isSupabaseConfigured) return;
+
+    setLoadingReplies(prev => ({ ...prev, [entryId]: true }));
+
     try {
-      // 1. Fetch entries joined with profiles
-      const { data: entriesData, error: entriesError } = await supabase
+      const { data, error } = await supabase
+        .from('replies')
+        .select(`
+          id,
+          entry_id,
+          text,
+          created_at,
+          author_id,
+          profiles (
+            display_name,
+            username,
+            avatar_color
+          )
+        `)
+        .eq('entry_id', entryId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      let resonatedReplyIds: string[] = [];
+      if (session) {
+        const replyIds = (data || []).map(r => r.id);
+        if (replyIds.length > 0) {
+          const { data: replyResData } = await supabase
+            .from('reply_resonances')
+            .select('reply_id')
+            .eq('user_id', session.user.id)
+            .in('reply_id', replyIds);
+          if (replyResData) resonatedReplyIds = replyResData.map(r => r.reply_id);
+        }
+      }
+
+      const mappedReplies: Reply[] = (data || []).map((r: any) => ({
+        id: r.id,
+        author: r.profiles?.display_name || 'Anonymous',
+        avatar: (r.profiles?.display_name || 'A').charAt(0).toUpperCase(),
+        avatarColor: r.profiles?.avatar_color || '#7f8c8d',
+        text: r.text,
+        timestamp: formatTimestamp(r.created_at),
+        hasResonated: resonatedReplyIds.includes(r.id),
+        author_id: r.author_id,
+        created_at: r.created_at,
+      }));
+
+      setRepliesMap(prev => ({ ...prev, [entryId]: mappedReplies }));
+    } catch (err) {
+      console.error(`Failed to load replies for entry ${entryId}:`, err);
+    } finally {
+      setLoadingReplies(prev => ({ ...prev, [entryId]: false }));
+    }
+  };
+
+  const fetchEntries = async (isRefresh: boolean = false) => {
+    if (!isSupabaseConfigured) return;
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      if (loadingMore || !hasMore) return;
+      setLoadingMore(true);
+    }
+
+    try {
+      const PAGE_SIZE = 20;
+
+      let query = supabase
         .from('entries')
         .select(`
           id,
@@ -330,65 +418,44 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             display_name,
             username,
             avatar_color
-          )
+          ),
+          replies (count)
         `)
         .order('created_at', { ascending: false });
 
+      if (!isRefresh && entries.length > 0) {
+        const oldestEntry = entries[entries.length - 1];
+        if (oldestEntry && oldestEntry.created_at) {
+          query = query.lt('created_at', oldestEntry.created_at);
+        }
+      }
+
+      const { data: entriesData, error: entriesError } = await query.limit(PAGE_SIZE);
       if (entriesError) throw entriesError;
 
-      // 2. Fetch replies joined with profiles
-      const { data: repliesData, error: repliesError } = await supabase
-        .from('replies')
-        .select(`
-          id,
-          entry_id,
-          text,
-          created_at,
-          author_id,
-          profiles (
-            display_name,
-            username,
-            avatar_color
-          )
-        `)
-        .order('created_at', { ascending: true });
+      const newEntriesData = entriesData || [];
 
-      if (repliesError) throw repliesError;
+      if (newEntriesData.length < PAGE_SIZE) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
 
-      // 3. Fetch user's resonances
+      // Fetch resonances for these entries
       let resonatedIds: string[] = [];
-      let resonatedReplyIds: string[] = [];
-      if (session) {
+      const entryIds = newEntriesData.map(e => e.id);
+
+      if (session && entryIds.length > 0) {
         const { data: resData } = await supabase
           .from('resonances')
           .select('entry_id')
-          .eq('user_id', session.user.id);
+          .eq('user_id', session.user.id)
+          .in('entry_id', entryIds);
         if (resData) resonatedIds = resData.map(r => r.entry_id);
-
-        const { data: replyResData } = await supabase
-          .from('reply_resonances')
-          .select('reply_id')
-          .eq('user_id', session.user.id);
-        if (replyResData) resonatedReplyIds = replyResData.map(r => r.reply_id);
       }
 
-      // 4. Map DB models to React Frontend models
-      const mapped: Entry[] = (entriesData || []).map((item: any) => {
+      const mapped: Entry[] = newEntriesData.map((item: any) => {
         const authorProfile = item.profiles;
-        const entryReplies = (repliesData || [])
-          .filter((r: any) => r.entry_id === item.id)
-          .map((r: any) => ({
-            id: r.id,
-            author: r.profiles?.display_name || 'Anonymous',
-            avatar: (r.profiles?.display_name || 'A').charAt(0).toUpperCase(),
-            avatarColor: r.profiles?.avatar_color || '#7f8c8d',
-            text: r.text,
-            timestamp: formatTimestamp(r.created_at),
-            hasResonated: resonatedReplyIds.includes(r.id),
-            author_id: r.author_id,
-          }));
-
-        // pgvector returns vector data as a string (e.g. "[0.1,-0.2...]") or an array
         let embeddingVector: number[] | null = null;
         if (item.embedding) {
           embeddingVector = typeof item.embedding === 'string' 
@@ -403,19 +470,35 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           avatarColor: authorProfile?.avatar_color || '#7f8c8d',
           text: item.text,
           timestamp: formatTimestamp(item.created_at),
-          replies: entryReplies,
+          replies: [], // Loaded dynamically now
+          replyCount: item.replies?.[0]?.count || 0,
           hasResonated: resonatedIds.includes(item.id),
           tags: item.tags || [],
           category: item.category || 'General',
           isPrivate: item.is_private,
           author_id: item.author_id,
           embedding: embeddingVector,
+          created_at: item.created_at,
         };
       });
 
-      setEntries(mapped);
+      if (isRefresh) {
+        setEntries(mapped);
+      } else {
+        setEntries(prev => {
+          const existingIds = new Set(prev.map(e => e.id));
+          const filteredMapped = mapped.filter(e => !existingIds.has(e.id));
+          return [...prev, ...filteredMapped];
+        });
+      }
     } catch (err) {
       console.error('Failed to sync entries from Supabase:', err);
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -437,7 +520,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       timestamp: 'Just now',
       replies: [],
       hasResonated: false,
-      isPrivate
+      isPrivate,
+      created_at: new Date().toISOString(),
     };
     setEntries([newEntry, ...entries]);
   };
@@ -445,7 +529,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addEntry = async (text: string, authorName: string = 'You', isPrivate: boolean = false) => {
     if (isSupabaseConfigured && session) {
       try {
-        // Fetch thought embedding from secure Supabase Edge Function (routing to Google Gemini API)
         let embedding: number[] | null = null;
         try {
           const { data, error } = await supabase.functions.invoke('get-embedding', {
@@ -458,7 +541,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           console.warn('Embedding generation skipped/failed, inserting entry without vector:', e);
         }
 
-        // Basic category and tags heuristic from content
         const words = text.toLowerCase().split(/\s+/);
         const tags = Array.from(new Set(words.filter(w => w.length > 4 && !STOP_WORDS.has(w)).slice(0, 4)));
         let category = 'General';
@@ -480,7 +562,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         });
 
         if (error) throw error;
-        await fetchEntriesFromSupabase();
+        await fetchEntries(true);
       } catch (err) {
         console.error('Error adding entry to Supabase:', err);
         pushLocalEntry(text, isPrivate);
@@ -499,7 +581,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           text: text.trim(),
         });
         if (error) throw error;
-        await fetchEntriesFromSupabase();
+        await loadReplies(entryId);
       } catch (err) {
         console.error('Error adding reply to Supabase:', err);
       }
@@ -514,7 +596,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
               avatar: 'Y',
               avatarColor: '#F0706A',
               text,
-              timestamp: 'Just now'
+              timestamp: 'Just now',
+              created_at: new Date().toISOString(),
             };
             return {
               ...entry,
@@ -535,7 +618,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (!entry) return;
 
         if (entry.hasResonated) {
-          // Remove resonance row
           const { error } = await supabase
             .from('resonances')
             .delete()
@@ -543,7 +625,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             .eq('entry_id', entryId);
           if (error) throw error;
         } else {
-          // Add resonance row
           const { error } = await supabase
             .from('resonances')
             .insert({
@@ -552,12 +633,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             });
           if (error) throw error;
         }
-        await fetchEntriesFromSupabase();
+        await fetchEntries(true);
       } catch (err) {
         console.error('Failed to toggle resonance in Supabase:', err);
       }
     } else {
-      // Local toggle
       setEntries(prevEntries =>
         prevEntries.map(entry =>
           entry.id === entryId
@@ -571,8 +651,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const toggleReplyResonance = async (entryId: string, replyId: string) => {
     if (isSupabaseConfigured && session) {
       try {
-        const entry = entries.find(e => e.id === entryId);
-        const reply = entry?.replies.find(r => r.id === replyId);
+        const replies = repliesMap[entryId] || [];
+        const reply = replies.find(r => r.id === replyId);
         if (!reply) return;
 
         if (reply.hasResonated) {
@@ -591,12 +671,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             });
           if (error) throw error;
         }
-        await fetchEntriesFromSupabase();
+        await loadReplies(entryId);
       } catch (err) {
         console.error('Failed to toggle reply resonance in Supabase:', err);
       }
     } else {
-      // Local toggle
       setEntries(prevEntries =>
         prevEntries.map(entry => {
           if (entry.id === entryId) {
@@ -623,12 +702,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           .update({ is_private: false })
           .eq('id', entryId);
         if (error) throw error;
-        await fetchEntriesFromSupabase();
+        await fetchEntries(true);
       } catch (err) {
         console.error('Error sharing entry publicly in Supabase:', err);
       }
     } else {
-      // Local toggle
       setEntries(prevEntries =>
         prevEntries.map(entry =>
           entry.id === entryId
@@ -655,7 +733,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', session.user.id);
       if (error) throw error;
       setProfile((prev: any) => prev ? { ...prev, ...updates } : null);
-      await fetchEntriesFromSupabase();
+      await fetchEntries(true);
     } else {
       setProfile((prev: any) => ({
         id: 'sandbox-user',
@@ -666,72 +744,105 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const getMatches = (text: string): MatchResult[] => {
+  const getMatches = async (text: string, targetEntryId?: string): Promise<MatchResult[]> => {
     if (!text || text.trim().length < 5) return [];
 
-    // If Supabase is configured and we have embeddings, calculate similarity in Javascript
-    if (isSupabaseConfigured && entries.length > 0) {
-      let activeEmbedding: number[] | null = null;
-      
-      const matchingEntry = entries.find(e => e.text.trim() === text.trim());
-      if (matchingEntry && matchingEntry.embedding) {
-        activeEmbedding = matchingEntry.embedding;
-      } else if (text.trim() === draftText.trim()) {
-        activeEmbedding = draftEmbedding;
-      }
+    if (isSupabaseConfigured) {
+      try {
+        let results: any[] = [];
+        
+        if (targetEntryId) {
+          const { data, error } = await supabase.rpc('match_entry_by_id', {
+            target_entry_id: targetEntryId,
+            match_threshold: 0.05,
+            match_count: 10,
+            exclude_author_id: session?.user?.id || '00000000-0000-0000-0000-000000000000'
+          });
+          if (error) throw error;
+          results = data || [];
+        } else {
+          let activeEmbedding: number[] | null = null;
+          
+          if (text.trim() === draftText.trim() && draftEmbedding) {
+            activeEmbedding = draftEmbedding;
+          } else {
+            const { data: embedData, error: embedError } = await supabase.functions.invoke('get-embedding', {
+              body: { text: text.trim() },
+            });
+            if (!embedError && embedData?.embedding) {
+              activeEmbedding = embedData.embedding;
+            }
+          }
 
-      if (activeEmbedding) {
-        const results = entries
-          .filter(e => e.text.trim() !== text.trim() && !e.isPrivate && e.embedding)
-          .map(entry => {
-            const similarity = cosineSimilarity(activeEmbedding!, entry.embedding!);
-            const score = Math.min(Math.round(similarity * 100), 100);
+          if (activeEmbedding) {
+            const { data, error } = await supabase.rpc('match_entries', {
+              query_embedding: activeEmbedding,
+              match_threshold: 0.05,
+              match_count: 10,
+              exclude_author_id: session?.user?.id || '00000000-0000-0000-0000-000000000000'
+            });
+            if (error) throw error;
+            results = data || [];
+          }
+        }
 
-            const entryCategory = entry.category || 'General';
-            const lowerCategory = entryCategory.toLowerCase();
-
-            let type: 'Aligned' | 'Complementary' | 'Challenging' = 'Complementary';
-            let reason = `Brings neighboring ideas related to ${lowerCategory}`;
-            
-            if (score > 80) {
-              type = 'Aligned';
-              reason = `Highly aligned perspective on ${entryCategory}`;
-            } else if (score > 40) {
-              // Check if opposing keywords exist to classify as challenging
-              const lowerA = text.toLowerCase();
-              const lowerB = entry.text.toLowerCase();
-              const opposes = (lowerA.includes('vc') && lowerB.includes('bootstrapping')) ||
-                              (lowerA.includes('bootstrapping') && lowerB.includes('vc')) ||
-                              (lowerA.includes('emergent') && lowerB.includes('mimicry')) ||
-                              (lowerA.includes('mimicry') && lowerB.includes('emergent'));
-              
-              if (opposes) {
-                type = 'Challenging';
-                reason = `Contrasting take on ${entryCategory}`;
-              } else {
-                type = 'Complementary';
-                reason = `Adds neighboring concepts on ${entryCategory}`;
-              }
+        return results.map((item: any) => {
+          const similarity = item.similarity || 0;
+          const score = Math.min(Math.round(similarity * 100), 100);
+          
+          let type: 'Aligned' | 'Complementary' | 'Challenging' = 'Complementary';
+          const entryCategory = item.category || 'General';
+          
+          if (score > 80) {
+            type = 'Aligned';
+          } else if (score > 45) {
+            const lowerA = text.toLowerCase();
+            const lowerB = item.text.toLowerCase();
+            const opposes = (lowerA.includes('vc') && lowerB.includes('bootstrapping')) ||
+                            (lowerA.includes('bootstrapping') && lowerB.includes('vc')) ||
+                            (lowerA.includes('emergent') && lowerB.includes('mimicry')) ||
+                            (lowerA.includes('mimicry') && lowerB.includes('emergent'));
+            if (opposes) {
+              type = 'Challenging';
             } else {
               type = 'Complementary';
-              reason = `Examines adjacent concepts in ${lowerCategory}`;
             }
+          }
 
-            return {
-              entry,
-              score,
-              type,
-              reason
-            };
-          })
-          .filter(m => m.score > 5)
-          .sort((a, b) => b.score - a.score);
+          let reason = `Brings neighboring ideas related to ${entryCategory.toLowerCase()}`;
+          if (type === 'Aligned') {
+            reason = `Highly aligned perspective on ${entryCategory}`;
+          } else if (type === 'Challenging') {
+            reason = `Contrasting take on ${entryCategory}`;
+          }
 
-        return results;
+          const entry: Entry = {
+            id: item.id,
+            author: item.author_name || 'Anonymous',
+            avatar: (item.author_name || 'A').charAt(0).toUpperCase(),
+            avatarColor: item.author_avatar_color || '#7f8c8d',
+            text: item.text,
+            timestamp: formatTimestamp(item.created_at),
+            replies: [],
+            hasResonated: false,
+            tags: item.tags || [],
+            category: item.category || 'General',
+            author_id: item.author_id,
+            created_at: item.created_at,
+          };
+
+          return {
+            entry,
+            score,
+            type,
+            reason
+          };
+        });
+      } catch (err) {
+        console.error('Failed to fetch matches from Supabase RPC:', err);
       }
     }
 
-    // Fallback to Jaccard keyword matching in Sandbox mode
     return calculateMatches(text, entries);
   };
 
@@ -752,7 +863,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       profile,
       authLoading,
       signOut,
-      updateProfile
+      updateProfile,
+      fetchEntries,
+      loadingMore,
+      refreshing,
+      hasMore,
+      repliesMap,
+      loadingReplies,
+      loadReplies
     }}>
       {children}
     </AppContext.Provider>

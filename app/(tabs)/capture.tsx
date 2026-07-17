@@ -77,13 +77,13 @@ export default function CaptureScreen() {
             <View style={styles.bottomBar}>
               <View style={styles.attachmentIcons}>
                 <TouchableOpacity style={styles.attachmentIcon} activeOpacity={0.6}>
-                  <Feather name="image" size={16} color="#636366" />
+                  <Feather name="image" size={16} color="#ffffff" strokeWidth={2.2} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.attachmentIcon} activeOpacity={0.6}>
-                  <Feather name="paperclip" size={16} color="#636366" />
+                  <Feather name="paperclip" size={16} color="#ffffff" strokeWidth={2.2} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.attachmentIcon} activeOpacity={0.6}>
-                  <Feather name="hash" size={16} color="#636366" />
+                  <Feather name="hash" size={16} color="#ffffff" strokeWidth={2.2} />
                 </TouchableOpacity>
               </View>
 
@@ -114,7 +114,7 @@ export default function CaptureScreen() {
             {/* Lock thought option */}
             <View style={styles.privacyRow}>
               <View style={styles.privacyLabelContainer}>
-                <Feather name={isPrivate ? "lock" : "unlock"} size={14} color="#636366" style={{ marginRight: 6 }} />
+                <Feather name={isPrivate ? "lock" : "unlock"} size={14} color="#ffffff" strokeWidth={2.2} style={{ marginRight: 6 }} />
                 <Text style={styles.privacyLabel}>Lock to Private Notebook</Text>
               </View>
               <Switch

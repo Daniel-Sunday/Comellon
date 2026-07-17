@@ -34,7 +34,7 @@ export default function TabLayout() {
         options={{
           title: 'Notebook',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={size || 24} color={color} />
+            <Feather name="list" size={size || 24} color={color} strokeWidth={2.2} />
           ),
         }}
       />
@@ -43,7 +43,7 @@ export default function TabLayout() {
         options={{
           title: 'Matches',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="compass" size={size || 24} color={color} />
+            <Feather name="compass" size={size || 24} color={color} strokeWidth={2.2} />
           ),
         }}
       />
@@ -52,7 +52,7 @@ export default function TabLayout() {
         options={{
           title: 'Drop Thoughts',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="edit-3" size={size || 24} color={color} />
+            <Feather name="edit-3" size={size || 24} color={color} strokeWidth={2.2} />
           ),
         }}
       />
@@ -61,7 +61,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size || 24} color={color} />
+            <Feather name="user" size={size || 24} color={color} strokeWidth={2.2} />
           ),
         }}
       />

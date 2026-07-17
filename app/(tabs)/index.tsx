@@ -9,7 +9,9 @@ import {
   Platform,
   Animated,
   Modal,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  FlatList,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -17,12 +19,29 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp, MatchResult } from '@/context/AppContext';
 
 export default function FeedScreen() {
-  const { entries, addReply, toggleResonance, toggleReplyResonance, replyDrafts, setReplyDraft, getMatches, draftText, shareEntryPublicly } = useApp();
-  const { posted } = useLocalSearchParams<{ posted?: string }>();
+  const { 
+    entries, 
+    addReply, 
+    toggleResonance, 
+    toggleReplyResonance, 
+    replyDrafts, 
+    setReplyDraft, 
+    getMatches, 
+    draftText, 
+    shareEntryPublicly,
+    fetchEntries,
+    loadingMore,
+    refreshing,
+    hasMore,
+    repliesMap,
+    loadingReplies,
+    loadReplies
+  } = useApp();
+  const { posted, replyTo } = useLocalSearchParams<{ posted?: string; replyTo?: string }>();
   const router = useRouter();
 
-  // Scroll View reference to scroll-to-top on Toast "View" click
-  const scrollViewRef = useRef<ScrollView>(null);
+  // FlatList reference to scroll-to-top on Toast "View" click
+  const scrollViewRef = useRef<FlatList>(null);
 
   // Track which entries have their threads expanded
   const [expandedEntries, setExpandedEntries] = useState<Record<string, boolean>>({
@@ -49,6 +68,34 @@ export default function FeedScreen() {
   // Related Search State
   const [searchEntryId, setSearchEntryId] = useState<string | null>(null);
   const [searchType, setSearchType] = useState<'Aligned' | 'Complementary' | 'Challenging' | null>(null);
+
+  const searchEntry = entries.find(e => e.id === searchEntryId);
+  const [filteredSearchMatches, setFilteredSearchMatches] = useState<MatchResult[]>([]);
+  const [loadingSearchMatches, setLoadingSearchMatches] = useState(false);
+
+  useEffect(() => {
+    if (!searchEntryId || !searchType || !searchEntry) {
+      setFilteredSearchMatches([]);
+      return;
+    }
+    let isMounted = true;
+    setLoadingSearchMatches(true);
+    getMatches(searchEntry.text, searchEntry.id)
+      .then(results => {
+        if (isMounted) {
+          setFilteredSearchMatches(
+            results.filter(m => m.entry.id !== searchEntryId && m.type === searchType && m.score > 5)
+          );
+          setLoadingSearchMatches(false);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching search matches:', err);
+        if (isMounted) setLoadingSearchMatches(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [searchEntryId, searchType, entries]);
 
   const handleOpenOptions = (entryId: string) => {
     setOptionsEntryId(entryId);
@@ -121,6 +168,14 @@ export default function FeedScreen() {
     }
   }, [posted]);
 
+  useEffect(() => {
+    if (replyTo) {
+      handleOpenReplyModal(replyTo);
+      // Clean up search params
+      router.setParams({ replyTo: undefined });
+    }
+  }, [replyTo]);
+
   const handleDismissToast = () => {
     Animated.timing(toastOpacity, {
       toValue: 0,
@@ -133,7 +188,7 @@ export default function FeedScreen() {
 
   const handleViewPost = () => {
     // Scroll to top
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    scrollViewRef.current?.scrollToOffset({ offset: 0, animated: true });
     // Trigger flash highlight
     setHighlightFirst(true);
     handleDismissToast();
@@ -143,10 +198,15 @@ export default function FeedScreen() {
   };
 
   const toggleThread = (entryId: string) => {
+    const isNowExpanded = !expandedEntries[entryId];
     setExpandedEntries(prev => ({
       ...prev,
-      [entryId]: !prev[entryId]
+      [entryId]: isNowExpanded
     }));
+
+    if (isNowExpanded) {
+      loadReplies(entryId);
+    }
   };
 
   const handleSendReply = (entryId: string) => {
@@ -166,20 +226,6 @@ export default function FeedScreen() {
 
   // 1. Filter out user's private entries
   const notebookEntries = entries.filter(e => e.author === 'You');
-
-  // 2. Fetch matches based on latest notebook entry, draft, or default seed
-  const referenceText = notebookEntries.length > 0
-    ? notebookEntries[0].text
-    : (draftText.trim().length > 0
-        ? draftText
-        : 'A quiet notebook app where writing down thoughts feels low-stakes, completely free from algorithms, vanity likes, and social metrics.');
-
-  const matches = getMatches(referenceText);
-  const activeMatches = matches.filter(m => m.entry.author !== 'You' && m.score > 5);
-
-  // Model 3: Resonance Spark (top match score >= 70%)
-  const topMatch = activeMatches.length > 0 && activeMatches[0].score >= 70 ? activeMatches[0] : null;
-  const otherMatches = topMatch ? activeMatches.slice(1) : activeMatches;
 
   const renderFeedEntry = (entry: any, index: number, isExpanded: boolean, hasReplies: boolean, isFirst: boolean) => {
     return (
@@ -411,21 +457,35 @@ export default function FeedScreen() {
           {/* Right Column */}
           <View style={styles.rightColumn}>
             <View style={styles.authorRow}>
-              <Text style={styles.authorName}>{entry.author}</Text>
-              <TouchableOpacity 
-                style={styles.moreOptionsButton}
-                onPress={() => handleOpenOptions(entry.id)}
-                activeOpacity={0.6}
-              >
-                <Feather name="more-horizontal" size={16} color="#636366" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.authorName}>{entry.author}</Text>
+                <Text style={styles.timestampMuted}>  {entry.timestamp}</Text>
+                {entry.isPrivate && (
+                  <Feather name="lock" size={12} color="#ffffff" strokeWidth={2.2} style={{ marginLeft: 8 }} />
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {entry.isPrivate && (
+                  <TouchableOpacity 
+                    style={[styles.privateCardShareButton, { paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10, marginRight: 8 }]} 
+                    onPress={() => shareEntryPublicly(entry.id)}
+                    activeOpacity={0.6}
+                  >
+                    <Feather name="share-2" size={10} color="#ffffff" strokeWidth={2.2} style={{ marginRight: 4 }} />
+                    <Text style={[styles.privateCardShareText, { fontSize: 10 }]}>Share Publicly</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  style={styles.moreOptionsButton}
+                  onPress={() => handleOpenOptions(entry.id)}
+                  activeOpacity={0.6}
+                >
+                  <Feather name="more-horizontal" size={16} color="#636366" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Text style={styles.entryText}>{entry.text}</Text>
-
-            <Text style={styles.thinkingTimestamp}>
-              Notebook Entry · {entry.timestamp}
-            </Text>
 
             {/* Horizontal Action Bar */}
             <View style={styles.actionBar}>
@@ -437,7 +497,8 @@ export default function FeedScreen() {
                 <Feather 
                   name="activity" 
                   size={18} 
-                  color={entry.hasResonated ? '#F0706A' : '#8e8e93'} 
+                  color={entry.hasResonated ? '#F0706A' : '#ffffff'} 
+                  strokeWidth={2.2}
                 />
                 {entry.hasResonated && <View style={styles.resonanceDot} />}
               </TouchableOpacity>
@@ -447,15 +508,15 @@ export default function FeedScreen() {
                 onPress={() => handleOpenReplyModal(entry.id)}
                 activeOpacity={0.6}
               >
-                <Feather name="message-circle" size={18} color="#8e8e93" />
+                <Feather name="message-circle" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Feather name="repeat" size={18} color="#8e8e93" />
+                <Feather name="repeat" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionIcon} activeOpacity={0.6}>
-                <Ionicons name="paper-plane-outline" size={18} color="#8e8e93" />
+                <Feather name="send" size={18} color="#ffffff" strokeWidth={2.2} />
               </TouchableOpacity>
             </View>
 
@@ -463,7 +524,7 @@ export default function FeedScreen() {
             {!isExpanded && hasReplies && (
               <View style={styles.metadataRow}>
                 <Text style={styles.metadataText}>
-                  {entry.replies.length} {entry.replies.length === 1 ? 'reply' : 'replies'}
+                  {entry.replyCount ?? entry.replies.length} {(entry.replyCount ?? entry.replies.length) === 1 ? 'reply' : 'replies'}
                 </Text>
               </View>
             )}
@@ -475,55 +536,60 @@ export default function FeedScreen() {
           <View style={styles.repliesContainer}>
             <View style={styles.repliesConnectorLine} />
 
-            {entry.replies.map((reply: any) => (
-              <View key={reply.id} style={styles.replyRow}>
-                <View style={styles.replyLeftColumn}>
-                  <View style={[styles.avatarCircle, { backgroundColor: reply.avatarColor, width: 32, height: 32, borderRadius: 16 }]}>
-                    <Text style={[styles.avatarText, { fontSize: 12 }]}>{reply.avatar}</Text>
+            {loadingReplies[entry.id] ? (
+              <ActivityIndicator style={{ paddingVertical: 20, alignSelf: 'center' }} color="#F0706A" />
+            ) : (
+              (repliesMap[entry.id] || entry.replies || []).map((reply: any) => (
+                <View key={reply.id} style={styles.replyRow}>
+                  <View style={styles.replyLeftColumn}>
+                    <View style={[styles.avatarCircle, { backgroundColor: reply.avatarColor, width: 32, height: 32, borderRadius: 16 }]}>
+                      <Text style={[styles.avatarText, { fontSize: 12 }]}>{reply.avatar}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.replyRightColumn}>
+                    <View style={styles.replyHeader}>
+                      <Text style={styles.replyAuthor}>{reply.author}</Text>
+                      <Text style={styles.replyTimestamp}> {reply.timestamp}</Text>
+                    </View>
+                    <Text style={styles.replyText}>{reply.text}</Text>
+
+                    {/* Reply Action Bar */}
+                    <View style={styles.replyActionBar}>
+                      <TouchableOpacity 
+                        style={styles.replyActionIcon} 
+                        onPress={() => toggleReplyResonance(entry.id, reply.id)}
+                        activeOpacity={0.6}
+                      >
+                        <Feather 
+                          name="activity" 
+                          size={14} 
+                          color={reply.hasResonated ? '#F0706A' : '#ffffff'} 
+                          strokeWidth={2.2}
+                        />
+                        {reply.hasResonated && <View style={styles.replyResonanceDot} />}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.replyActionIcon} 
+                        onPress={() => handleOpenReplyModal(entry.id)}
+                        activeOpacity={0.6}
+                      >
+                        <Feather name="message-circle" size={14} color="#ffffff" strokeWidth={2.2} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                        <Feather name="repeat" size={14} color="#ffffff" strokeWidth={2.2} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
+                        <Feather name="send" size={14} color="#ffffff" strokeWidth={2.2} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
-
-                <View style={styles.replyRightColumn}>
-                  <View style={styles.replyHeader}>
-                    <Text style={styles.replyAuthor}>{reply.author}</Text>
-                    <Text style={styles.replyTimestamp}>· {reply.timestamp}</Text>
-                  </View>
-                  <Text style={styles.replyText}>{reply.text}</Text>
-
-                  {/* Reply Action Bar */}
-                  <View style={styles.replyActionBar}>
-                    <TouchableOpacity 
-                      style={styles.replyActionIcon} 
-                      onPress={() => toggleReplyResonance(entry.id, reply.id)}
-                      activeOpacity={0.6}
-                    >
-                      <Feather 
-                        name="activity" 
-                        size={14} 
-                        color={reply.hasResonated ? '#F0706A' : '#8e8e93'} 
-                      />
-                      {reply.hasResonated && <View style={styles.replyResonanceDot} />}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={styles.replyActionIcon} 
-                      onPress={() => handleOpenReplyModal(entry.id)}
-                      activeOpacity={0.6}
-                    >
-                      <Feather name="message-circle" size={14} color="#8e8e93" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
-                      <Feather name="repeat" size={14} color="#8e8e93" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.replyActionIcon} activeOpacity={0.6}>
-                      <Ionicons name="paper-plane-outline" size={14} color="#8e8e93" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            ))}
+              ))
+            )}
 
             {/* Inline Reply Composer Box aligned to the grid */}
             <View style={styles.replyRow}>
@@ -565,11 +631,6 @@ export default function FeedScreen() {
     );
   };
 
-  // Calculate search results matches
-  const searchEntry = entries.find(e => e.id === searchEntryId);
-  const searchMatches = searchEntry ? getMatches(searchEntry.text) : [];
-  const filteredSearchMatches = searchMatches.filter(m => m.entry.id !== searchEntryId && m.type === searchType && m.score > 5);
-
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       {/* Centered Borderless Header */}
@@ -589,51 +650,30 @@ export default function FeedScreen() {
         </View>
       </View>
 
-      <ScrollView 
-        ref={scrollViewRef}
+      <FlatList
+        ref={scrollViewRef as any}
+        style={styles.container}
+        data={entries}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item: entry, index }) => {
+          const isExpanded = !!expandedEntries[entry.id];
+          const hasReplies = (entry.replyCount ?? 0) > 0 || entry.replies.length > 0;
+          const isFirst = index === 0;
+
+          return renderFeedEntry(entry, index, isExpanded, hasReplies, isFirst);
+        }}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.container}>
-          {entries.map((entry, index) => {
-            // Render Private Notebook Card
-            if (entry.isPrivate) {
-              return (
-                <View key={entry.id} style={styles.privateCardContainer}>
-                  <View style={styles.privateCardHeader}>
-                    <View style={styles.privateCardLockRow}>
-                      <Feather name="lock" size={14} color="#8e8e93" style={{ marginRight: 6 }} />
-                      <Text style={styles.privateCardLockText}>Private Notebook</Text>
-                    </View>
-                    
-                    <TouchableOpacity 
-                      style={styles.privateCardShareButton} 
-                      onPress={() => shareEntryPublicly(entry.id)}
-                      activeOpacity={0.6}
-                    >
-                      <Feather name="share-2" size={12} color="#ffffff" style={{ marginRight: 4 }} />
-                      <Text style={styles.privateCardShareText}>Share Publicly</Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  <Text style={styles.privateCardBody}>{entry.text}</Text>
-                  
-                  <Text style={styles.privateCardTimestamp}>
-                    Timestamp · {entry.timestamp}
-                  </Text>
-                </View>
-              );
-            }
-
-            // Render standard public timeline feed row
-            const isExpanded = !!expandedEntries[entry.id];
-            const hasReplies = entry.replies.length > 0;
-            const isFirst = index === 0;
-
-            return renderFeedEntry(entry, index, isExpanded, hasReplies, isFirst);
-          })}
-        </View>
-      </ScrollView>
+        onRefresh={() => fetchEntries(true)}
+        refreshing={refreshing}
+        onEndReached={() => fetchEntries(false)}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={() => 
+          loadingMore ? (
+            <ActivityIndicator style={{ paddingVertical: 20 }} color="#F0706A" />
+          ) : null
+        }
+      />
 
       {/* Threads Web-Style Bottom Toast Notification */}
       {showToast && (
@@ -829,7 +869,10 @@ export default function FeedScreen() {
                       <View style={styles.searchModalThreadLine} />
                     </View>
                     <View style={styles.rightColumn}>
-                      <Text style={styles.authorName}>{searchEntry.author}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.authorName}>{searchEntry.author}</Text>
+                        <Text style={styles.timestampMuted}> {searchEntry.timestamp}</Text>
+                      </View>
                       <Text style={styles.searchParentText}>{searchEntry.text}</Text>
                     </View>
                   </View>
@@ -861,9 +904,11 @@ export default function FeedScreen() {
                                </View>
                              </View>
                              <View style={styles.rightColumn}>
-                               <Text style={styles.authorName}>{entry.author}</Text>
+                               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                 <Text style={styles.authorName}>{entry.author}</Text>
+                                 <Text style={styles.timestampMuted}> {entry.timestamp}</Text>
+                               </View>
                                <Text style={styles.entryText}>{entry.text}</Text>
-                               <Text style={styles.thinkingTimestamp}>Notebook Entry · {entry.timestamp}</Text>
                              </View>
                            </View>
                          </View>
@@ -1018,7 +1063,7 @@ const styles = StyleSheet.create({
   thinkingTimestamp: {
     color: '#636366',
     fontSize: 12,
-    marginTop: 8,
+    marginRight: 24,
     fontFamily: Platform.OS === 'web' ? 'system-ui, -apple-system, sans-serif' : undefined,
   },
   actionBar: {
